@@ -1,0 +1,12 @@
+{
+  "name": "besswave-onboarding-demo",
+  "version": "1.0.0",
+  "description": "Interactive AI onboarding demo that builds Besswave user context in ~7 minutes",
+  "scripts": {
+    "demo": "bun run demo.ts",
+    "start": "bun run demo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0"
+  }
+}
