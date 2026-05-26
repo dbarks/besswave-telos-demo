@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Besswave User Context System</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0A0E1A;
+    --card: #1E2A3A;
+    --card2: #162030;
+    --blue: #3B82F6;
+    --blue-dim: #1E3A5F;
+    --green: #10B981;
+    --green-dim: #0D3B2E;
+    --red: #EF4444;
+    --red-dim: #3B1515;
+    --amber: #F59E0B;
+    --text: #F1F5F9;
+    --text-dim: #94A3B8;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --border: rgba(255,255,255,0.08);
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--sans); color: var(--text); }
+
+  .deck { width: 100%; height: 100%; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; transform: translateX(60px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+  }
+  .slide.active { opacity: 1; transform: translateX(0); pointer-events: all; }
+  .slide.prev { opacity: 0; transform: translateX(-60px); }
+
+  .slide-counter {
+    position: fixed; top: 24px; right: 32px;
+    font-size: 13px; color: var(--text-dim); z-index: 100;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress {
+    position: fixed; bottom: 0; left: 0; height: 3px;
+    background: var(--blue); z-index: 100;
+    transition: width 0.4s ease;
+  }
+
+  .nav-hint {
+    position: fixed; bottom: 16px; right: 32px;
+    font-size: 12px; color: var(--text-dim); z-index: 100;
+  }
+
+  /* Typography */
+  .label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); font-weight: 600; margin-bottom: 12px; }
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.1; }
+  h2 { font-size: clamp(1.5rem, 3.5vw, 2.25rem); font-weight: 700; margin-bottom: 16px; }
+  h3 { font-size: 1.1rem; font-weight: 600; }
+  .sub { font-size: clamp(1rem, 2vw, 1.25rem); color: var(--text-dim); margin-top: 12px; line-height: 1.5; }
+  .small { font-size: 0.85rem; color: var(--text-dim); margin-top: 8px; }
+
+  /* Cards */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px 28px;
+  }
+  .card.red { background: var(--red-dim); border-color: var(--red); }
+  .card.green { background: var(--green-dim); border-color: var(--green); }
+  .card.blue { background: var(--blue-dim); border-color: var(--blue); }
+
+  /* Response blocks */
+  .chat-block { width: 100%; max-width: 760px; }
+  .chat-q { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 8px; font-style: italic; }
+  .chat-q strong { color: var(--text); }
+  .chat-a { font-family: var(--sans); font-size: 0.95rem; line-height: 1.65; }
+  .chat-label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+  .chat-label.bad { color: var(--red); }
+  .chat-label.good { color: var(--green); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { text-align: left; padding: 10px 14px; color: var(--blue); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .highlight-row td { background: rgba(59,130,246,0.12); }
+  .highlight-row td:first-child { border-left: 3px solid var(--blue); padding-left: 11px; }
+
+  /* Flow diagram */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .flow-step {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 32px;
+    font-size: 0.95rem; text-align: center; min-width: 340px;
+  }
+  .flow-arrow { color: var(--blue); font-size: 1.4rem; line-height: 1; padding: 2px 0; }
+
+  /* Grid */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; width: 100%; }
+
+  /* Phase cards */
+  .phase-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .phase-num { font-size: 0.75rem; color: var(--blue); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+  .phase-title { font-size: 1rem; font-weight: 700; margin: 4px 0; }
+  .phase-time { font-size: 0.8rem; color: var(--amber); }
+  .phase-desc { font-size: 0.82rem; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+  .phase-output { font-size: 0.78rem; color: var(--green); margin-top: 8px; font-family: var(--mono); }
+
+  /* Code block */
+  .code-block { background: #0D1421; border: 1px solid var(--blue); border-radius: 10px; padding: 20px 24px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.7; color: #A8C7FA; width: 100%; white-space: pre-wrap; }
+
+  /* Stats */
+  .stats { display: flex; gap: 48px; justify-content: center; margin-top: 32px; }
+  .stat-num { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 800; color: var(--blue); }
+  .stat-label { font-size: 0.85rem; color: var(--text-dim); margin-top: 4px; }
+
+  /* Goal status */
+  .goal-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; font-size: 0.88rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .dot.red { background: var(--red); }
+  .dot.amber { background: var(--amber); }
+  .dot.green { background: var(--green); }
+
+  /* Pill badge */
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+  .badge.red { background: rgba(239,68,68,0.2); color: var(--red); }
+  .badge.amber { background: rgba(245,158,11,0.2); color: var(--amber); }
+
+  /* Number highlight */
+  .big-num { font-size: clamp(3rem, 7vw, 5rem); font-weight: 900; color: var(--blue); line-height: 1; }
+
+  /* Slide-specific layouts */
+  .slide-title { text-align: center; }
+  .slide-title h1 { background: linear-gradient(135deg, #F1F5F9 0%, #3B82F6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  .context-box { background: var(--card2); border: 1px solid var(--blue); border-radius: 10px; padding: 20px 24px; font-size: 0.85rem; line-height: 1.7; max-width: 700px; width: 100%; }
+  .context-box .kv { margin-bottom: 8px; }
+  .context-box .k { color: var(--blue); font-weight: 600; }
+
+  .cta-slide { text-align: center; }
+  .cta-big { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; background: linear-gradient(135deg, #F1F5F9 0%, #3B82F6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  .build-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+  .build-num { font-size: 1.2rem; font-weight: 800; color: var(--blue); line-height: 1; flex-shrink: 0; width: 24px; }
+
+  .system-tag { display: inline-block; background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; padding: 3px 10px; font-size: 0.78rem; font-family: var(--mono); color: #93C5FD; margin: 3px 4px 3px 0; }
+
+  .graceful-row { display: flex; gap: 12px; margin-top: 16px; }
+  .graceful-card { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 0.82rem; }
+  .graceful-card .state { font-weight: 700; color: var(--text); font-size: 0.85rem; margin-bottom: 4px; }
+  .graceful-card .action { color: var(--text-dim); line-height: 1.4; }
+  .graceful-card.full .state { color: var(--green); }
+  .graceful-card.partial .state { color: var(--amber); }
+  .graceful-card.none .state { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="slide-counter"><span id="cur">1</span> / 12</div>
+<div class="progress" id="progress"></div>
+<div class="nav-hint">← → to navigate</div>
+
+<div class="deck" id="deck">
+
+<!-- Slide 1: Title -->
+<div class="slide active slide-title" data-index="0">
+  <div class="label">Besswave</div>
+  <h1>User Context System</h1>
+  <p class="sub" style="max-width:600px;text-align:center;">How the AI learns who you are —<br>and why it changes everything.</p>
+  <p class="small" style="margin-top:32px;">Powered by structured user context &nbsp;·&nbsp; Inspired by the Telos pattern</p>
+</div>
+
+<!-- Slide 2: The Problem -->
+<div class="slide" data-index="1">
+  <div style="width:100%;max-width:800px;">
+    <div class="label">The Problem</div>
+    <h2>Without context, every query starts from zero.</h2>
+    <div class="card red" style="margin-top:24px;">
+      <div class="chat-label bad">Without context</div>
+      <div class="chat-block">
+        <div class="chat-q"><strong>You:</strong> How are we doing on open IT tickets?</div>
+        <div class="chat-a" style="color:#FCA5A5;">I don't have access to your ticketing data. Could you tell me which system you use? And what metrics would you like to see — volume, resolution time, open count?</div>
+      </div>
+    </div>
+    <p style="margin-top:20px;color:var(--text-dim);font-size:1rem;">Every. Single. Query. The AI asks clarifying questions instead of answering. Context resets to zero every time.</p>
+  </div>
+</div>
+
+<!-- Slide 3: The Fix -->
+<div class="slide" data-index="2">
+  <div style="width:100%;max-width:800px;">
+    <div class="label">The Fix</div>
+    <h2>With context, the AI already knows you.</h2>
+    <div class="card green" style="margin-top:24px;">
+      <div class="chat-label good">With context (Sarah Chen loaded)</div>
+      <div class="chat-block">
+        <div class="chat-q"><strong>You:</strong> How are we doing on open IT tickets?</div>
+        <div class="chat-a">Your current open ticket SLA is <strong>3.8 days</strong> against your Q2 target of <strong>2.5 days</strong> — you're off track by 1.3 days. ServiceNow shows 147 open P2+ tickets, up 23% from last month. The Portland site accounts for 31 of those, which is disproportionate to its headcount ratio. Want me to break that down by category or team member?</div>
+      </div>
+    </div>
+    <p style="margin-top:20px;color:var(--text-dim);font-size:1rem;">One file. Prepended to every query. The AI knows the system, the target, the anomaly — and what to surface next.</p>
+  </div>
+</div>
+
+<!-- Slide 4: How It Works -->
+<div class="slide" data-index="3">
+  <div style="width:100%;max-width:680px;">
+    <div class="label">Architecture</div>
+    <h2 style="margin-bottom:28px;">One integration. Permanent personalization.</h2>
+    <div class="flow">
+      <div class="flow-step">Onboarding interview (~35 min)</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">User fills 7 context files</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step" style="border-color:var(--blue);color:var(--blue);font-weight:600;">AI synthesizes <code>CONTEXT_SUMMARY.md</code></div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">Every query: summary prepended to system prompt</div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step" style="border-color:var(--green);color:var(--green);font-weight:600;">AI answers as if it already knows the operator</div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 5: The 8 Files -->
+<div class="slide" data-index="4">
+  <div style="width:100%;max-width:920px;">
+    <div class="label">Structure</div>
+    <h2 style="margin-bottom:20px;">Eight files. One synthesis.</h2>
+    <table>
+      <thead><tr><th>File</th><th>What It Contains</th><th>Who Authors It</th></tr></thead>
+      <tbody>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">USER_IDENTITY.md</td><td>Role, company, team, reporting line, systems used</td><td style="color:var(--text-dim);">User (onboarding)</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">OPERATIONAL_MISSION.md</td><td>Strategic priorities — the 2–4 things that matter most this year</td><td style="color:var(--text-dim);">User (onboarding)</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">GOALS.md</td><td>Measurable goals with KPIs, targets, and deadlines</td><td style="color:var(--text-dim);">User (onboarding interview)</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">DATA_LANDSCAPE.md</td><td>Connected systems, what each holds, what questions it can answer</td><td style="color:var(--text-dim);">System + user review</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">DECISION_CONTEXT.md</td><td>Recurring decisions the user makes and what data drives them</td><td style="color:var(--text-dim);">User (interview)</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">FRICTION_POINTS.md</td><td>Pre-Besswave pain points — the workflows this replaces</td><td style="color:var(--text-dim);">User (onboarding)</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">PREFERENCES.md</td><td>How to format answers — tables vs prose, tone, vocabulary</td><td style="color:var(--text-dim);">User (preferences)</td></tr>
+        <tr class="highlight-row"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;">CONTEXT_SUMMARY.md</td><td><strong>AI-synthesized 50-line summary for system-prompt injection</strong></td><td style="color:var(--green);font-weight:600;">Auto-generated</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Slide 6: Sarah Chen -->
+<div class="slide" data-index="5">
+  <div style="width:100%;max-width:900px;">
+    <div class="label">Demo Persona</div>
+    <h2 style="margin-bottom:20px;">Meet Sarah Chen.</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-bottom:14px;">Identity</h3>
+        <div style="font-size:0.88rem;line-height:1.8;">
+          <div><span style="color:var(--text-dim);">Title:</span> VP of Operations</div>
+          <div><span style="color:var(--text-dim);">Company:</span> MidWest Distribution Co</div>
+          <div><span style="color:var(--text-dim);">Reports to:</span> Linda Garrison, COO</div>
+          <div style="margin-top:10px;"><span style="color:var(--text-dim);">Systems:</span></div>
+          <div style="margin-top:6px;">
+            <span class="system-tag">ServiceNow</span>
+            <span class="system-tag">Salesforce</span>
+            <span class="system-tag">Intune</span>
+            <span class="system-tag">NetSuite</span>
+            <span class="system-tag">Snowflake</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:14px;">Active Goals</h3>
+        <div class="goal-item"><div class="dot red"></div><div><strong>IT SLA:</strong> 3.8 days → 2.5 days by Sept 30 <span class="badge red">Off track</span></div></div>
+        <div class="goal-item"><div class="dot amber"></div><div><strong>Facilities backlog:</strong> 62 → &lt;20 by July 15 <span class="badge amber">At risk</span></div></div>
+        <div class="goal-item"><div class="dot amber"></div><div><strong>Chicago device refresh:</strong> 34 of 85 by June 30 <span class="badge amber">At risk</span></div></div>
+        <div class="goal-item"><div class="dot" style="background:var(--text-dim)"></div><div><strong>Self-service adoption:</strong> 9% → 21% by Dec 31</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 7: CONTEXT_SUMMARY.md -->
+<div class="slide" data-index="6">
+  <div style="width:100%;max-width:780px;">
+    <div class="label">The Integration Point</div>
+    <h2 style="margin-bottom:6px;">CONTEXT_SUMMARY.md</h2>
+    <p class="small" style="margin-bottom:18px;">~400 tokens · prepended to every query · auto-regenerated when source files change</p>
+    <div class="context-box">
+      <div class="kv">You are assisting <strong>Sarah Chen</strong>, VP of Operations at MidWest Distribution Co (Indianapolis, IN — ~450 employees, ~$65M revenue). She manages IT operations, facilities, and process improvement across three sites, reporting to COO Linda Garrison.</div>
+      <div class="kv"><span class="k">What she's driving right now:</span><br>
+        · IT ticket SLA from 4.2 days to <strong>2.5 days</strong> by September 30 (currently at <span style="color:var(--red);">3.8 days — off track</span>)<br>
+        · Facilities maintenance backlog from 62 open items to fewer than 20 by July 15<br>
+        · Chicago device refresh: 34 of 85 devices complete, deadline June 30
+      </div>
+      <div class="kv"><span class="k">Connected systems:</span> ServiceNow · Salesforce · Microsoft Intune · NetSuite · Snowflake</div>
+      <div class="kv"><span class="k">How to answer her:</span> Lead with the number and whether it's on track or off track. Flag anomalies in the first sentence. Use system names. Use tables for comparisons with 3+ categories.</div>
+    </div>
+    <p style="margin-top:16px;text-align:center;color:var(--blue);font-size:0.95rem;font-weight:600;">This is what changes everything.</p>
+  </div>
+</div>
+
+<!-- Slide 8: Token Budget -->
+<div class="slide" data-index="7">
+  <div style="width:100%;max-width:800px;">
+    <div class="label">Token Budget</div>
+    <h2 style="margin-bottom:8px;">Lean by design.</h2>
+    <p class="sub" style="margin-bottom:20px;font-size:0.95rem;">~400 tokens per query. 80% of the personalization value at 15% of the token cost.</p>
+    <table>
+      <thead><tr><th>File</th><th>Typical Tokens</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr class="highlight-row"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;">CONTEXT_SUMMARY.md</td><td style="font-weight:700;">350–500</td><td style="color:var(--blue);font-weight:600;">← Only file injected per query</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">USER_IDENTITY.md</td><td>200–400</td><td style="color:var(--text-dim);">Source only — not injected directly</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">GOALS.md</td><td>400–600</td><td style="color:var(--text-dim);">Source only — summarized</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">DATA_LANDSCAPE.md</td><td>600–1000</td><td style="color:var(--text-dim);">Source only — key systems extracted</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">DECISION_CONTEXT.md</td><td>400–700</td><td style="color:var(--text-dim);">Source only — patterns summarized</td></tr>
+        <tr><td style="font-family:var(--mono);font-size:0.8rem;">PREFERENCES.md</td><td>300–500</td><td style="color:var(--text-dim);">Source only — distilled</td></tr>
+        <tr><td style="font-weight:600;">Total source files</td><td style="font-weight:600;">~2200–3700</td><td style="color:var(--text-dim);">Read only during regeneration</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Slide 9: Onboarding Flow -->
+<div class="slide" data-index="8">
+  <div style="width:100%;max-width:900px;">
+    <div class="label">Onboarding</div>
+    <h2 style="margin-bottom:20px;">35 minutes to full personalization.</h2>
+    <div class="grid3">
+      <div class="phase-card">
+        <div class="phase-num">Phase 1</div>
+        <div class="phase-title">Identity</div>
+        <div class="phase-time">5 min</div>
+        <div class="phase-desc">Title, team, systems, reporting line</div>
+        <div class="phase-output">→ USER_IDENTITY.md</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 2</div>
+        <div class="phase-title">Strategic Priorities</div>
+        <div class="phase-time">5 min</div>
+        <div class="phase-desc">Top 2–4 things that matter most this year</div>
+        <div class="phase-output">→ OPERATIONAL_MISSION.md</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 3</div>
+        <div class="phase-title">Goals & KPIs</div>
+        <div class="phase-time">10 min</div>
+        <div class="phase-desc">Measurable targets with deadlines and current state</div>
+        <div class="phase-output">→ GOALS.md</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 4</div>
+        <div class="phase-title">Data Landscape</div>
+        <div class="phase-time">5 min</div>
+        <div class="phase-desc">Connected systems and what questions they answer</div>
+        <div class="phase-output">→ DATA_LANDSCAPE.md</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 5</div>
+        <div class="phase-title">Decisions & Friction</div>
+        <div class="phase-time">10 min</div>
+        <div class="phase-desc">Recurring decisions + old pain points Besswave replaces</div>
+        <div class="phase-output">→ DECISION_CONTEXT.md + FRICTION_POINTS.md</div>
+      </div>
+      <div class="phase-card">
+        <div class="phase-num">Phase 6</div>
+        <div class="phase-title">Preferences</div>
+        <div class="phase-time">5 min</div>
+        <div class="phase-desc">Format, tone, vocabulary, detail level</div>
+        <div class="phase-output">→ PREFERENCES.md</div>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:16px;color:var(--blue);font-weight:600;font-size:0.95rem;">→ AI auto-generates CONTEXT_SUMMARY.md from all six files</p>
+  </div>
+</div>
+
+<!-- Slide 10: Developer Integration -->
+<div class="slide" data-index="9">
+  <div style="width:100%;max-width:820px;">
+    <div class="label">Developer Integration</div>
+    <h2 style="margin-bottom:16px;">One file. One prepend. Done.</h2>
+    <div class="code-block">[System Prompt]
+You are a Besswave operations intelligence assistant.
+The following context describes the user you are assisting:
+
+---
+{CONTEXT_SUMMARY.md contents}
+---
+
+Answer using the connected data systems listed above.
+When the user refers to "we" or "our," treat it as their organization.
+Apply their stated preferences for format and tone.
+
+[User Query]
+{user's question}</div>
+    <div class="graceful-row">
+      <div class="graceful-card full">
+        <div class="state">Full context</div>
+        <div class="action">Load and inject — full personalization</div>
+      </div>
+      <div class="graceful-card partial">
+        <div class="state">Stub only</div>
+        <div class="action">Partial answers + prompt to complete onboarding</div>
+      </div>
+      <div class="graceful-card none">
+        <div class="state">No context</div>
+        <div class="action">Generic answers + prompt to start onboarding</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 11: What to Build -->
+<div class="slide" data-index="10">
+  <div style="width:100%;max-width:800px;">
+    <div class="label">Roadmap</div>
+    <h2 style="margin-bottom:20px;">The pattern is proven. Here's what comes next.</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="build-item"><div class="build-num">1</div><div><strong>Onboarding interview UI</strong> — Guided conversation that captures the six phases and writes the context files</div></div>
+      <div class="build-item"><div class="build-num">2</div><div><strong>CONTEXT_SUMMARY regenerator</strong> — Auto-synthesize whenever a source file changes</div></div>
+      <div class="build-item"><div class="build-num">3</div><div><strong>Per-user secure storage</strong> — Context files contain sensitive operational data; store accordingly</div></div>
+      <div class="build-item"><div class="build-num">4</div><div><strong>Refresh triggers</strong> — Quarterly prompts to review goals; auto-regenerate on integration changes</div></div>
+      <div class="build-item"><div class="build-num">5</div><div><strong>Preference learning</strong> — In-session feedback ("less detail please") updates PREFERENCES.md automatically</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 12: CTA -->
+<div class="slide cta-slide" data-index="11">
+  <div class="label">Get Started</div>
+  <div class="cta-big">The AI already knows your users.</div>
+  <p class="sub" style="margin-top:16px;">Or it can. In 35 minutes.</p>
+  <div class="stats">
+    <div style="text-align:center;"><div class="stat-num">35<span style="font-size:1.5rem;vertical-align:super;">min</span></div><div class="stat-label">Time to full context onboarding</div></div>
+    <div style="text-align:center;"><div class="stat-num">~400<span style="font-size:1.5rem;vertical-align:super;">tok</span></div><div class="stat-label">Per-query context overhead</div></div>
+    <div style="text-align:center;"><div class="stat-num">8</div><div class="stat-label">Files to capture everything</div></div>
+  </div>
+  <p style="margin-top:40px;color:var(--blue);font-size:1rem;font-weight:600;">→ Open DEMO.html to see it in action</p>
+</div>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const counter = document.getElementById('cur');
+  const progress = document.getElementById('progress');
+  let current = 0;
+  const total = slides.length;
+
+  function goTo(n) {
+    if (n < 0 || n >= total) return;
+    slides[current].classList.remove('active');
+    slides[current].classList.add('prev');
+    setTimeout(() => slides[current].classList.remove('prev'), 400);
+    current = n;
+    slides[current].classList.add('active');
+    counter.textContent = current + 1;
+    progress.style.width = ((current + 1) / total * 100) + '%';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End') goTo(total - 1);
+  });
+
+  document.getElementById('deck').addEventListener('click', () => goTo(current + 1));
+
+  progress.style.width = (1 / total * 100) + '%';
+</script>
+</body>
+</html>

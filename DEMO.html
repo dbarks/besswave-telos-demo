@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Besswave Context Demo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0A0E1A;
+    --surface: #111827;
+    --card: #1E2A3A;
+    --blue: #3B82F6;
+    --blue-dim: #1E3A5F;
+    --green: #10B981;
+    --green-dim: #0D3B2E;
+    --red: #EF4444;
+    --red-dim: #3B1515;
+    --amber: #F59E0B;
+    --text: #F1F5F9;
+    --text-dim: #94A3B8;
+    --border: rgba(255,255,255,0.08);
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  html, body { width: 100%; min-height: 100vh; background: var(--bg); font-family: var(--sans); color: var(--text); }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    transition: background 0.3s ease;
+  }
+  .header.on { background: #0F1A2E; border-bottom-color: rgba(59,130,246,0.3); }
+  .header.off { background: #1A0D0D; border-bottom-color: rgba(239,68,68,0.2); }
+
+  .logo { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+  .logo span { color: var(--blue); }
+  .demo-tag { font-size: 0.75rem; color: var(--text-dim); margin-left: 8px; }
+
+  /* Toggle */
+  .toggle-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 100px; padding: 4px 6px 4px 12px;
+    cursor: pointer; user-select: none;
+    transition: all 0.2s ease;
+  }
+  .toggle-bar:hover { border-color: rgba(255,255,255,0.15); }
+  .toggle-label { font-size: 0.85rem; font-weight: 500; }
+  .toggle-pill {
+    width: 48px; height: 26px; border-radius: 100px;
+    background: var(--red-dim); border: 1px solid var(--red);
+    position: relative; transition: all 0.25s ease; flex-shrink: 0;
+  }
+  .toggle-pill::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--red); transition: all 0.25s ease;
+  }
+  .toggle-bar.on .toggle-pill { background: var(--blue-dim); border-color: var(--blue); }
+  .toggle-bar.on .toggle-pill::after { left: 25px; background: var(--blue); }
+  .toggle-bar.on .toggle-label { color: var(--blue); }
+  .toggle-bar:not(.on) .toggle-label { color: var(--red); }
+
+  /* Layout */
+  .main { max-width: 900px; margin: 0 auto; padding: 24px 24px 80px; }
+
+  /* Context panel */
+  .context-panel {
+    background: var(--card); border: 1px solid var(--blue);
+    border-radius: 12px; overflow: hidden;
+    max-height: 0; opacity: 0;
+    transition: max-height 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
+    margin-bottom: 0;
+  }
+  .context-panel.open { max-height: 400px; opacity: 1; margin-bottom: 20px; }
+
+  .context-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: rgba(59,130,246,0.1);
+    border-bottom: 1px solid rgba(59,130,246,0.2);
+  }
+  .context-header-left { display: flex; align-items: center; gap: 10px; }
+  .context-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .context-title { font-size: 0.82rem; font-weight: 600; color: var(--blue); letter-spacing: 0.05em; text-transform: uppercase; }
+  .context-token { font-size: 0.75rem; color: var(--text-dim); }
+
+  .context-body { padding: 16px 20px; font-size: 0.83rem; line-height: 1.7; color: var(--text-dim); }
+  .context-body strong { color: var(--text); }
+  .context-body .ck { color: var(--blue); font-weight: 600; }
+  .context-body .goal { margin: 3px 0; display: flex; align-items: baseline; gap: 8px; }
+  .context-body .goal-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; position: relative; top: 1px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; margin-left: 4px; }
+  .badge.red { background: rgba(239,68,68,0.2); color: var(--red); }
+  .badge.amber { background: rgba(245,158,11,0.2); color: var(--amber); }
+  .sys-tag { display: inline-block; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); border-radius: 4px; padding: 1px 7px; font-size: 0.75rem; font-family: var(--mono); color: #93C5FD; margin: 2px 3px 2px 0; }
+
+  /* Query chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    padding: 7px 14px; border-radius: 100px; font-size: 0.82rem;
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--card); color: var(--text-dim);
+    transition: all 0.15s ease;
+  }
+  .chip:hover:not(:disabled) { border-color: var(--blue); color: var(--text); background: rgba(59,130,246,0.08); }
+  .chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Chat */
+  .chat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; min-height: 320px; padding: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .msg { display: flex; gap: 10px; max-width: 85%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-bubble {
+    padding: 10px 14px; border-radius: 12px; font-size: 0.88rem; line-height: 1.6;
+  }
+  .msg.user .msg-bubble { background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.3); color: var(--text); }
+  .msg.ai .msg-bubble { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+  .msg.ai.bad .msg-bubble { background: var(--red-dim); border-color: rgba(239,68,68,0.25); }
+  .msg.ai.good .msg-bubble { background: var(--green-dim); border-color: rgba(16,185,129,0.25); }
+  .msg.system .msg-bubble { background: transparent; border: none; color: var(--text-dim); font-size: 0.78rem; text-align: center; font-style: italic; width: 100%; }
+  .msg.system { justify-content: center; max-width: 100%; }
+
+  .avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; margin-top: 2px; }
+  .avatar.user-av { background: var(--blue); color: white; }
+  .avatar.ai-av { background: var(--card); border: 1px solid var(--border); color: var(--text-dim); font-size: 0.65rem; }
+
+  .typing { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+  .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.88rem; text-align: center; line-height: 1.6; }
+
+  /* Input */
+  .input-row { display: flex; gap: 8px; margin-top: 12px; }
+  .input-box {
+    flex: 1; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 0.88rem;
+    color: var(--text); font-family: var(--sans); outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .input-box:focus { border-color: var(--blue); }
+  .input-box::placeholder { color: var(--text-dim); }
+  .send-btn {
+    padding: 10px 20px; background: var(--blue); color: white;
+    border: none; border-radius: 8px; font-size: 0.88rem;
+    font-weight: 600; cursor: pointer; transition: opacity 0.15s ease;
+    white-space: nowrap;
+  }
+  .send-btn:hover { opacity: 0.85; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .clear-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 6px; padding: 6px 12px; font-size: 0.78rem;
+    cursor: pointer; transition: all 0.15s ease; margin-top: 8px;
+    display: none;
+  }
+  .clear-btn.visible { display: inline-block; }
+  .clear-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+  /* Context state indicator */
+  .state-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 8px; font-size: 0.82rem;
+    margin-bottom: 12px; border: 1px solid transparent;
+    transition: all 0.3s ease;
+  }
+  .state-bar.off-state { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: var(--red); }
+  .state-bar.on-state { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); color: var(--blue); }
+  .state-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .state-bar.off-state .state-indicator { background: var(--red); }
+  .state-bar.on-state .state-indicator { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+</style>
+</head>
+<body>
+
+<div class="header" id="header">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="logo">Bess<span>wave</span></div>
+    <div class="demo-tag">· Context Demo</div>
+  </div>
+  <div class="toggle-bar" id="toggle" onclick="toggleContext()">
+    <div class="toggle-label" id="toggle-label">No Context</div>
+    <div class="toggle-pill" id="toggle-pill"></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Context panel -->
+  <div class="context-panel" id="contextPanel">
+    <div class="context-header">
+      <div class="context-header-left">
+        <div class="context-dot"></div>
+        <div class="context-title">What the AI knows</div>
+      </div>
+      <div class="context-token">~400 tokens · prepended to every query</div>
+    </div>
+    <div class="context-body">
+      You are assisting <strong>Sarah Chen</strong>, VP of Operations at <strong>MidWest Distribution Co</strong> (Indianapolis, IN — ~450 employees, ~$65M revenue). She manages IT operations, facilities, and process improvement across three sites, reporting to COO Linda Garrison.
+      <br><br>
+      <span class="ck">Active goals:</span>
+      <div class="goal"><span class="goal-dot" style="background:var(--red)"></span><span>IT ticket SLA: 3.8 days → <strong>2.5 days</strong> by Sept 30 <span class="badge red">Off track</span></span></div>
+      <div class="goal"><span class="goal-dot" style="background:var(--amber)"></span><span>Facilities backlog: 62 → &lt;20 by July 15 <span class="badge amber">At risk</span></span></div>
+      <div class="goal"><span class="goal-dot" style="background:var(--amber)"></span><span>Chicago device refresh: 34 of 85 by June 30 <span class="badge amber">At risk</span></span></div>
+      <br>
+      <span class="ck">Connected systems:</span><br>
+      <span class="sys-tag">ServiceNow</span><span class="sys-tag">Salesforce</span><span class="sys-tag">Intune</span><span class="sys-tag">NetSuite</span><span class="sys-tag">Snowflake</span>
+      <br><br>
+      <span class="ck">How to answer her:</span> Lead with the number and whether it's on track or off track. Flag anomalies first. Use system names. Tables for comparisons with 3+ items.
+    </div>
+  </div>
+
+  <!-- State bar -->
+  <div class="state-bar off-state" id="stateBar">
+    <div class="state-indicator"></div>
+    <span id="stateText">Context off — the AI has no information about who you are or what you're tracking.</span>
+  </div>
+
+  <!-- Instruction -->
+  <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:10px;">Try a query below, then toggle context on and ask the same question to see the difference.</p>
+
+  <!-- Query chips -->
+  <div class="chips" id="chips">
+    <div class="chip" onclick="sendQuery(this, 0)">How are we doing on open IT tickets?</div>
+    <div class="chip" onclick="sendQuery(this, 1)">What's the status of the Chicago device refresh?</div>
+    <div class="chip" onclick="sendQuery(this, 2)">Any facilities maintenance items I should know about?</div>
+    <div class="chip" onclick="sendQuery(this, 3)">Summarize this week's operational risks for Linda.</div>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat" id="chat">
+    <div class="empty-state" id="emptyState">
+      Select a query above or type your own.<br>
+      Toggle context on to see the difference.
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+    <div class="input-row" style="flex:1;margin-top:0;">
+      <input class="input-box" id="inputBox" type="text" placeholder="Type your own query…" maxlength="200"
+        onkeydown="if(event.key==='Enter')sendCustom()">
+      <button class="send-btn" id="sendBtn" onclick="sendCustom()">Send</button>
+    </div>
+    <button class="clear-btn" id="clearBtn" onclick="clearChat()">Clear chat</button>
+  </div>
+
+</div>
+
+<script>
+const contextOn = { value: false };
+
+const queries = [
+  "How are we doing on open IT tickets?",
+  "What's the status of the Chicago device refresh?",
+  "Any facilities maintenance items I should know about?",
+  "Summarize this week's operational risks for Linda."
+];
+
+const responsesOff = [
+  "I don't have access to your ticketing data. Could you tell me which system you use? And what metrics would you like to see — volume, resolution time, open count?",
+  "I'd be happy to help with device refresh information. Could you tell me what device management system you're using and what you're tracking?",
+  "I can help you review facilities maintenance information. What system do you track maintenance items in, and what kind of summary are you looking for?",
+  "I can help you prepare a summary for your leadership. Could you tell me what systems you want to pull data from, and what format they prefer?"
+];
+
+const responsesOn = [
+  "Your current open ticket SLA is <strong>3.8 days</strong> against your Q2 target of <strong>2.5 days</strong> — you're off track by 1.3 days. ServiceNow shows 147 open P2+ tickets, up 23% from last month. The Portland site accounts for 31 of those, which is disproportionate to its headcount ratio. Want me to break that down by category or team member?",
+  "Chicago device refresh is <strong>40% complete</strong> — 34 of 85 devices replaced and enrolled in Intune. Your deadline is June 30, which is 5 weeks out. At current pace you'll need to average about 10 devices per week to hit the target. The remaining 51 devices haven't been scheduled yet. Want me to flag this as a risk for the Monday ops summary?",
+  "Facilities backlog is at <strong>62 open items</strong> — down from 87 in January but still well above your July 15 target of fewer than 20. At current close rate you'll end July around 35–40, which misses the target. Indianapolis HQ accounts for 38 of the open items. Renata's team closed 8 last week. You'll need to roughly double the close rate to hit July 15. Want a breakdown by site or priority?",
+  "<strong>Weekly Ops Summary — Sarah Chen → Linda Garrison</strong><br><br><strong style='color:#EF4444'>IT Tickets 🔴 Off Track:</strong> SLA at 3.8 days vs. 2.5-day target. Portland site is disproportionately high. Recommend: James Park reviews Portland workload distribution this week.<br><br><strong style='color:#F59E0B'>Chicago Device Refresh 🟡 At Risk:</strong> 34/85 complete. June 30 deadline requires 10 devices/week. Not currently on pace.<br><br><strong style='color:#F59E0B'>Facilities Backlog 🟡 At Risk:</strong> 62 open items vs. &lt;20 target by July 15. Close rate needs to double.<br><br><strong style='color:#10B981'>No New Escalations:</strong> No new P1 incidents this week."
+];
+
+function toggleContext() {
+  contextOn.value = !contextOn.value;
+  const toggle = document.getElementById('toggle');
+  const label = document.getElementById('toggle-label');
+  const header = document.getElementById('header');
+  const panel = document.getElementById('contextPanel');
+  const stateBar = document.getElementById('stateBar');
+  const stateText = document.getElementById('stateText');
+
+  if (contextOn.value) {
+    toggle.classList.add('on');
+    label.textContent = 'Sarah Chen — VP of Operations';
+    header.className = 'header on';
+    panel.classList.add('open');
+    stateBar.className = 'state-bar on-state';
+    stateText.textContent = 'Context loaded — Sarah Chen, VP of Operations, MidWest Distribution Co.';
+    addSystemMessage('— Context loaded: Sarah Chen, VP of Operations —');
+  } else {
+    toggle.classList.remove('on');
+    label.textContent = 'No Context';
+    header.className = 'header off';
+    panel.classList.remove('open');
+    stateBar.className = 'state-bar off-state';
+    stateText.textContent = 'Context off — the AI has no information about who you are or what you\'re tracking.';
+    addSystemMessage('— Context removed —');
+  }
+}
+
+function addSystemMessage(text) {
+  hideEmpty();
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg system';
+  div.innerHTML = `<div class="msg-bubble">${text}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function hideEmpty() {
+  const e = document.getElementById('emptyState');
+  if (e) e.style.display = 'none';
+}
+
+function setChipsDisabled(disabled) {
+  document.querySelectorAll('.chip').forEach(c => c.disabled = disabled);
+  document.getElementById('sendBtn').disabled = disabled;
+  document.getElementById('inputBox').disabled = disabled;
+}
+
+function sendQuery(chipEl, index) {
+  send(queries[index], index);
+}
+
+function sendCustom() {
+  const input = document.getElementById('inputBox');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  send(text, -1);
+}
+
+function send(text, index) {
+  hideEmpty();
+  setChipsDisabled(true);
+  document.getElementById('clearBtn').classList.add('visible');
+
+  const chat = document.getElementById('chat');
+
+  // User bubble
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.innerHTML = `<div class="avatar user-av">You</div><div class="msg-bubble">${escHtml(text)}</div>`;
+  chat.appendChild(userDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  // Typing indicator
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'msg ai';
+  typingDiv.innerHTML = `<div class="avatar ai-av">AI</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  chat.appendChild(typingDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  const delay = 600 + Math.random() * 400;
+
+  setTimeout(() => {
+    let responseHtml;
+    let quality;
+    if (index >= 0 && index < queries.length) {
+      if (contextOn.value) {
+        responseHtml = responsesOn[index];
+        quality = 'good';
+      } else {
+        responseHtml = escHtml(responsesOff[index]);
+        quality = 'bad';
+      }
+    } else {
+      if (contextOn.value) {
+        responseHtml = escHtml("Based on your operational profile, that's a question I'd pull from ServiceNow, Intune, NetSuite, or Snowflake depending on the specifics. To give you a live answer I'd query your connected systems — but your context tells me exactly where to look and what matters to you. What system should I start with?");
+        quality = 'good';
+      } else {
+        responseHtml = escHtml("I don't have enough context to answer that specifically. Could you tell me more about your role, the systems you use, and what you're trying to track?");
+        quality = 'bad';
+      }
+    }
+
+    typingDiv.className = `msg ai ${quality}`;
+    typingDiv.innerHTML = `<div class="avatar ai-av">AI</div><div class="msg-bubble">${responseHtml}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+    setChipsDisabled(false);
+  }, delay);
+}
+
+function clearChat() {
+  const chat = document.getElementById('chat');
+  chat.innerHTML = '<div class="empty-state" id="emptyState">Select a query above or type your own.<br>Toggle context on to see the difference.</div>';
+  document.getElementById('clearBtn').classList.remove('visible');
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
