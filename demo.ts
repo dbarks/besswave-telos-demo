@@ -10,6 +10,9 @@ import { createInterface, type Interface } from "readline";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
+const ACK_MODEL = "claude-haiku-4-5-20251001";
+const SYNTHESIS_MODEL = "claude-sonnet-4-6";
+
 // ── ANSI colors ────────────────────────────────────────────────────────────────
 
 const C = {
@@ -155,6 +158,40 @@ function extractName(identityAnswer: string): { full: string; dir: string } {
   return { full, dir: slugify(full) };
 }
 
+function formatAnthropicError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const status = typeof err === "object" && err !== null && "status" in err
+    ? (err as { status?: unknown }).status
+    : undefined;
+
+  if (status === 401 || message.includes("authentication_error")) {
+    return (
+      "Anthropic rejected ANTHROPIC_API_KEY. Check that it is a real, active " +
+      "key from console.anthropic.com, then re-export it before running the demo."
+    );
+  }
+
+  if (message.toLowerCase().includes("connection error")) {
+    return (
+      "Could not reach the Anthropic API. Check network access and try again."
+    );
+  }
+
+  return message;
+}
+
+async function verifyAnthropicAccess(client: Anthropic): Promise<void> {
+  try {
+    await client.messages.create({
+      model: ACK_MODEL,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "ping" }],
+    });
+  } catch (err) {
+    throw new Error(formatAnthropicError(err));
+  }
+}
+
 // ── Interview step ─────────────────────────────────────────────────────────────
 
 async function askQuestion(
@@ -171,23 +208,27 @@ async function askQuestion(
 
   // Stream a one-sentence acknowledgment (haiku — fast)
   process.stdout.write(`\n  ${C.dim}`);
-  const stream = client.messages.stream({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 65,
-    system:
-      "You're conducting a Besswave product onboarding. The user just answered one question. Reply with exactly ONE sentence that shows you heard them specifically — no filler openings like 'Great!' or 'Got it!' or 'That makes sense'. Be concrete. End naturally.",
-    messages: [{ role: "user", content: `They answered: "${answer}"` }],
-  });
+  try {
+    const stream = client.messages.stream({
+      model: ACK_MODEL,
+      max_tokens: 65,
+      system:
+        "You're conducting a Besswave product onboarding. The user just answered one question. Reply with exactly ONE sentence that shows you heard them specifically — no filler openings like 'Great!' or 'Got it!' or 'That makes sense'. Be concrete. End naturally.",
+      messages: [{ role: "user", content: `They answered: "${answer}"` }],
+    });
 
-  for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
-      process.stdout.write(event.delta.text);
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        process.stdout.write(event.delta.text);
+      }
     }
+    await stream.finalMessage();
+  } catch (err) {
+    throw new Error(formatAnthropicError(err));
   }
-  await stream.finalMessage();
 
   process.stdout.write(`${C.reset}\n`);
   return answer;
@@ -204,7 +245,7 @@ async function synthesize(
     .join("\n");
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: SYNTHESIS_MODEL,
     max_tokens: 6000,
     messages: [
       {
@@ -274,6 +315,16 @@ async function main() {
   }
 
   const client = new Anthropic();
+  try {
+    await verifyAnthropicAccess(client);
+  } catch (err) {
+    console.error(
+      `\n  ${C.red}${C.bold}Anthropic setup failed${C.reset}\n` +
+        `  ${C.dim}${(err as Error).message}${C.reset}\n`
+    );
+    process.exit(1);
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   // Banner

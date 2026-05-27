@@ -82,6 +82,15 @@ Start with Sarah Chen to see how a fully populated context system looks and read
 
 1. Read `personas/sarah-chen/CONTEXT_SUMMARY.md` — this is what gets injected into every query for Sarah.
 2. Compare it to the individual files that fed it — notice how it synthesizes without duplicating.
-3. Read `DEVELOPER_GUIDE.md` to see how to include this in Besswave's system prompt and how to build the onboarding interview that generates these files.
+3. Run the onboarding demo with a valid Anthropic API key:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+bun run demo
+```
+
+The demo checks Anthropic access before showing the interview. If the key is missing or invalid, it exits immediately with setup guidance instead of failing after the first answer.
+
+4. Read `DEVELOPER_GUIDE.md` to see how to include this in Besswave's system prompt and how to build the onboarding interview that generates these files.
 
 The guide also covers token budget, refresh cadence, and how to handle users who haven't completed onboarding yet.

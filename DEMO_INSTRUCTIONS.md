@@ -20,8 +20,10 @@ bun install
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-bun run demo.ts
+bun run demo
 ```
+
+The demo validates Anthropic access before the interview starts. If the key is missing, invalid, or network access is blocked, it exits before asking questions and prints the setup problem to fix.
 
 ## What you'll see
 
@@ -52,3 +54,14 @@ To walk someone through it: run it yourself first so you know the flow, then let
 ## Resetting for another person
 
 Each run creates a new output folder named after the person (`output/sarah-chen/`, `output/alex-rivera/`, etc.). Nothing gets overwritten unless two people have the same name.
+
+## Troubleshooting
+
+If the demo exits with `Anthropic setup failed`, re-export a valid API key from console.anthropic.com:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-your-real-key
+bun run demo
+```
+
+The most common cause is an expired, placeholder, or copied-wrong key. The demo intentionally checks this before the first question so a live walkthrough does not fail after someone starts answering.
